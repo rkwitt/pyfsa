@@ -46,30 +46,30 @@ import sys
 import os
 
 
-attr_list = [ #Average degree
+attr_list = [# Average degree
              lambda g : np.mean([e for e in g.degree().values()]),
              # Average eccentricity
-             lambda g : np.mean([i for i in nx.eccentricity(g).values()]),
+             #lambda g : np.mean([i for i in nx.eccentricity(g).values()]),
              # Average closeness centrality
-             lambda g : np.mean([e for e in nx.closeness_centrality(g).values()]),
+             #lambda g : np.mean([e for e in nx.closeness_centrality(g).values()]),
              # Percentage of isolated points (i.e., degree(v) = 1)
              lambda g : float(len(np.where(np.array(nx.degree(g).values())==1)[0]))/g.order(),
              # Spectral radius (i.e., largest AM eigenvalue)
-             lambda g : np.abs(nx.adjacency_spectrum(g))[0],
+             #lambda g : np.abs(nx.adjacency_spectrum(g))[0],
              # Spectral trace (i.e., sum of abs. eigenvalues)
-             lambda g : np.sum(np.abs(nx.adjacency_spectrum(g))),
+             # lambda g : np.sum(np.abs(nx.adjacency_spectrum(g))),
              # Label entropy, as defined in [2]
              lambda g : label_entropy([e[1]['type'] for e in g.nodes(data=True)]),
              # Mixing coefficient of attributes
              lambda g : np.linalg.det(nx.attribute_mixing_matrix(g,'type')),
              # Avg. #vertics with eccentricity == radius (i.e., central points)
-             lambda g : np.mean(float(len(nx.center(g)))/g.order()),
+             # lambda g : np.mean(float(len(nx.center(g)))/g.order()),
              # Link impurity, as defined in [2]
-             lambda g : link_impurity(g),
+             lambda g : link_impurity(g)]
              # Diameter := max(eccentricity)
-             lambda g : nx.diameter(g),
+             # lambda g : nx.diameter(g),
              # Radius := min(eccentricity)
-             lambda g : nx.radius(g)]
+             #lambda g : nx.radius(g)]
 
 
 def link_impurity(g):
