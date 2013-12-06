@@ -28,8 +28,10 @@ def bfs(G, seed_sample, max_visit=1, max_level=None):
     
     # C[i] is the set of vertices that form the cell of seed_sample[i]
     C = [[] for i in seed_sample]
+    set_C = [set() for i in seed_sample]
     # L[i][j] stores the distance of the C[i][j] to seed_sample[i]
     L = [[] for i in seed_sample] 
+        
         
     if max_level is None:
         max_level = N
@@ -47,11 +49,10 @@ def bfs(G, seed_sample, max_visit=1, max_level=None):
         v, dist, seed = Q.popleft()
         assert(dist <= max_level)
         
-        #print v
-        #print dist
-        #print seed
-        #raw_input()
-        
+        if v in set_C:
+            continue
+        set_C.insert(v)
+            
         C[seed].append(v)
         L[seed].append(dist)
         
