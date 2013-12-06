@@ -14,51 +14,54 @@ import os
 nV = int(sys.argv[1]) # nr of vertices
 nE = int(sys.argv[2]) # nr. of edges
 nSeed = int(sys.argv[3]) # nr. of seed vertices
-max_level = int(sys.argv[5]) # max. cell radius
 max_visit = int(sys.argv[4]) # max. vertex visits
+max_level = int(sys.argv[5]) # max. cell radius
 
 
 def bfs(G, seed_sample, max_visit=1, max_level=None):
     """Breadth-first search.
     """
-    print "Max level: %d" % max_level
-    raw_input()
     
     N = len(G.nodes())
     Q = deque(maxlen=N) 
     V = [0 for i in range(N)] # visit counter
-    S = [None for i in range(N)] # S[i] = seed vertex of i-th vertex
-    L = [None for i in range(N)] # L[i] = distance of i-th vertex to S[i]
     
+    # C[i] is the set of vertices that form the cell of seed_sample[i]
+    C = [[] for i in seed_sample]
+    # L[i][j] stores the distance of the C[i][j] to seed_sample[i]
+    L = [[] for i in seed_sample] 
+        
     if max_level is None:
         max_level = N
     
-    def enqueue(v, prev):
-        if not prev is None and L[prev]>=max_level:
-            return
-        
-        Q.append(v)
-        V[v] += 1 # INC visit count for v-th vertex
-        if not prev is None:
-            S[v] = S[prev] # set seed for v-th vertex
-            L[v] = L[prev]+1 # INC distance to seed by 1
-    
+   
     def get_neighborhood(v):
         return filter(lambda u: V[u]<max_visit, G.neighbors(v))
         
-    for v in seed_sample:
-        S[v] = v
-        L[v] = 0
-        enqueue(v, None)
+        
+    for i,v in enumerate(seed_sample):
+        Q.append((v, 0, i))
+        V[v] += 1
         
     while len(Q)>0:
-        v = Q.popleft()
-        assert(L[v] <= max_level)
+        v, dist, seed = Q.popleft()
+        assert(dist <= max_level)
         
-        for u in get_neighborhood(v):
-            enqueue(u,v)
-       
-    return (S,L)
+        #print v
+        #print dist
+        #print seed
+        #raw_input()
+        
+        C[seed].append(v)
+        L[seed].append(dist)
+        
+        if dist < max_level:
+            for u in get_neighborhood(v):
+                Q.append((u, dist+1, seed))
+                V[u] += 1
+                
+            
+    return (C,L)
 
 G = nx.gnm_random_graph(nV, nE, seed=1234)
 
@@ -68,18 +71,22 @@ G = nx.gnm_random_graph(nV, nE, seed=1234)
 
 rnd.seed(1234)
 seed_sample = rnd.sample(G.nodes(), nSeed)
-S, L = bfs(G, seed_sample, max_visit, max_level)
+C, L = bfs(G, seed_sample, max_visit, max_level)
 
 print seed_sample
-for v in range(len(S)):
-    if S[v] is None:
-        print "%d: no seed (/no level)!" % v
-    else:
-        print "%d: S=%d, L=%d" % (v, S[v], L[v])
+for s in range(len(seed_sample)):
+    print "seed: %d" % seed_sample[s]
+    print C[s]
+    print L[s]
+    
+    #if S[v] is None:
+    #    print "%d: no seed (/no level)!" % v
+    #else:
+    #    print "%d: S=%d, L=%d" % (v, S[v], L[v])
 
-for s in seed_sample:
-    cell = filter(lambda u: S[u] == s, G.nodes())
-    #print nx.adjacency_matrix(G.subgraph(cell))
+#for s in seed_sample:
+#    cell = filter(lambda u: S[u] == s, G.nodes())
+#    #print nx.adjacency_matrix(G.subgraph(cell))
     
     
     
