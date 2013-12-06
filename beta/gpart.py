@@ -49,9 +49,9 @@ def bfs(G, seed_sample, max_visit=1, max_level=None):
         v, dist, seed = Q.popleft()
         assert(dist <= max_level)
         
-        if v in set_C:
+        if v in set_C[seed]:
             continue
-        set_C.insert(v)
+        set_C[seed].add(v)
             
         C[seed].append(v)
         L[seed].append(dist)
