@@ -1,5 +1,11 @@
-"""GFSA: Generalized fine-strucure analysis
+"""GFSA: Generalized Fine-Structure Analysis
 """
+
+
+__license__ = "Apache License, Version 2.0"
+__author__  = "Roland Kwitt, University of Salzburg; Stefan Huber, IST Austria, 2013"
+__email__   = "E-Mail: roland.kwitt@kitware.com"
+__status__  = "Development"
 
 
 from collections import defaultdict
@@ -17,122 +23,205 @@ import sys
 import os
 
 
-def usage():
-    pass    
+funs = [# Average degree
+        lambda g : np.mean([e for e in g.degree().values()]),
+        # Percentage of isolated points (i.e., degree(v) = 1)
+        lambda g : float(len(np.where(np.array(nx.degree(g).values())==1)[0]))/g.order(),
+        # Label entropy, as defined in [2]
+        lambda g : label_entropy([e[1]['type'] for e in g.nodes(data=True)]),
+        # Mixing coefficient of attributes
+        lambda g : np.linalg.det(nx.attribute_mixing_matrix(g,'type')),
+        # Link impurity, as defined in [2]
+        lambda g : link_impurity(g)]
+     
+            
+def link_impurity(g):
+    """Compute link impurity of vertex-labeled graph."""
+    if len(g.nodes()) == 1:
+        return 0
+    edges = g.edges()
+    u = np.array([g.node[a]['type'] for (a,b) in edges])
+    v = np.array([g.node[b]['type'] for (a,b) in edges])
+    return float(len(np.nonzero(u - v)[0]))/len(edges)
 
 
-def load(l, b=None):
-    """Load pickled graphs.
-    """
-    if not b is None:
-        L = [os.path.join(b, x.strip()) for x in open(l)]
-    else:
-        L = [x.split() for x in open(l)]
+def label_entropy(labels):
+    """Compute entropy of label vector."""
+    H = np.bincount(labels)
+    p = H[np.nonzero(H)].astype(float)/np.sum(H)
+    return np.abs(-np.sum(p * np.log(p)))
     
-    data = []
-    for e in L:
-        data.append(pickle.load(e))
-    return data
+    
+def usage():
+    print """
+Usage: python gpart.py
+"""
+    sys.exit(os.EX_OK)
     
 
 def main(argv=None):
-
-    num_vseeds = None # N seed vertices
-    multiscale = None # Build multiscale features
-    graph_list = None # List of filenames with pickled graphs
+    if argv is None: 
+        argv = sys.argv
     
-    opts, args = getopt.getopt(sys.argv[1:], "hmv:l:s:")
+    opts, args = getopt.getopt(argv[1:], "hgv:l:s:i:m:o:")
+    
+    arg_out_file = None     # base name for output file (with features)
+    arg_data_file = None    # input file with pickled graph data
+    arg_max_visit = -1      # max. visit / vertex when running BFS
+    arg_max_level = +1      # max. level for BFS
+    arg_pbp_seeds = -1      # probability for choosing a vertex as a seed vertex
+    arg_num_scale = []      # compute FSF for each level
+    arg_run_global = False  # run global feature computation
 
     for opt, arg in opts:
         if opt == "-h":
             usage()
-            sys.exit(os.EX_OK)
+        if opt == "-i":
+            arg_data_file = arg
+        if opt == "-o":
+            arg_out_file = arg
+        if opt == '-g':
+            arg_run_global = True
         if opt == "-v":
-            max_visit = int(arg)
+            arg_max_visit = int(arg)
         if opt == "-l":
-            max_level = int(arg)
+            arg_max_level = int(arg)
         if opt == "-s":
-            num_seeds = int(arg)
+            arg_pbp_seeds = float(arg)
         if opt == "-m":
-            multiscale = True
-        if opt == "-i"      
-        
+            arg_num_scale = [int(x) for x in arg.split(',')]
     
-    if graph_list is None:
-        print "OOps: no graph list given ..."
-        sys.exit(os.EX_OK)
+    # Sanity checks ...
+    if arg_data_file is None:
+        print "OOps: data file not given given!"
+        sys.exit()
+    if not os.path.exists(arg_data_file):
+        print "Oops: data file not existent!"
+        sys.exit()
     
+    # Data loading ...
     t0 = time.clock()
-    data = load(graph_list)
+    data = pickle.load(open(arg_data_file, "r"))
     t1 = time.clock()
+    print "loaded data in %.3g [sec]" % (t1-t0)
+
+    graphs = data["G_dat"] # List of N networkx graphs
+    labels = data["G_cls"] # List of N numeric class assignments
     
-    t_bfs = 0 # cummulative runtime for BFS
-    t_fun = 0 # cummulative runtime for attribute computation
-                
-    for (G,l) in data:
-        V = G.nodes()
+    # Initialize timings
+    timings = dict()
+    timings["bfs_comp"] = 0
+    timings["fun_comp"] = 0
+    
+    F = None # Feature matrix
+    I = None # Index matrix
+    
+    # When running a global feature extraction, we do NOT need
+    # indices; just the feature matrix which is (#graphs x #funs)
+    if arg_run_global:
+        F = np.zeros((len(graphs),len(funs)))
+        I = np.zeros((len(graphs)))
+    
+    # Run over all graphs 
+    for i,G in enumerate(graphs):
+        print i
         
-        seed_sample = range(V)
-        if not n_seeds is None: 
-            seed_sample = rnd.sample(V, n_seed)
-       
-        # run BFS
+        V = G.nodes()   # node list for G
+        N = len(V)      # nr. of nodes in G
+        
+        if arg_run_global:
+            F[i,:] = np.asarray([f(G) for f in funs])
+            continue
+        
+        # Make sure that the probability is in [0,1]; if negative,
+        # we want to select ALL nodes as seed nodes!
+        if arg_pbp_seeds <= 0: 
+            seed_sample = range(N)
+        else:
+            assert arg_pbp_seeds > 0 and arg_pbp_seeds < 1
+            sel = int(np.round(float(N)*arg_pbp_seeds))
+            seed_sample = rnd.sample(V, sel)
+        
+        max_visit = arg_max_visit
+        max_level = arg_max_level
+        if arg_max_visit <= 0: max_visit = N # i.e., no limit
+        if arg_max_level <= 0: max_level = 1 # i.e., only subgraphs induced by nb. of radius 1
+        
+        # Run graph partitioning
         t0 = time.clock()
         (C,L) = bfs(G, seed_sample, max_visit, max_level)
         t1 = time.clock()
-        t_bfs += (t1-t0)
+        timings["bfs_comp"] += (t1-t0)
+    
+        S = 1 # scales
+        if len(arg_num_scale) > 1:
+            S = len(arg_num_scale)
+        V = np.zeros((len(seed_sample),len(funs)*S))
         
-        if multiscale:
-            F_tmp = 
-        else:    
-            F_tmp = np.zeros((len(C),len(funs))) 
-         
-        t0 =  time.clock()
-        for i,s in C:
-            sg_nodes = C[s] # partition nodes
-            sg_dists = L[s] # distance to seed vertices
+        # Iterate over all seed samples, get neighborhood-induced subgraphs
+        # and run feature computation
+        t0 = time.clock()
+        for s in range(len(seed_sample)):
+            sg_nodes = C[s] # nodes in cell induced by seed node s 
+            sg_dists = L[s] # distances of nodes in cell to seed node s
             
-            if multiscale:
-                
-                # TODO: slice out the cell subgraphs 
-                # for each distance!
-                
-                
-            else:
+            degenerates = []
+            
+            # When there are no scales given, we compute one feature
+            # vector for the WHOLE neighborhood cell
+            if not len(arg_num_scale):
                 sg = G.subgraph(sg_nodes)
-                if sg.nodes() == 1:
-                    continue
-                v = [f(sg) for f in funs]
-                F_tmp[i,:] = np.asarray(v)
+                V[s,:] = np.asarray([f(sg) for f in funs])
+            # otherwise, we compute one feature vector for each level
+            # up to max_level -> multiscale
+            else:
+                for j,r in enumerate(arg_num_scale):
+                    assert r <= max_level 
+                    
+                    idx = filter(lambda u: sg_dists[u]<=r, range(len(sg_nodes)))
+                    sg_r = G.subgraph([sg_nodes[x] for x in idx])
+                    
+                    #print "%d: %d/%d" % (r,len(sg_r.nodes()),len(G.nodes()))
+                    #raw_input()
+                    
+                    if len(sg_r.nodes()) == 1:
+                        degenerates.append(j)
+                        continue
+                    fs_r = np.asarray([f(sg_r) for f in funs])
+                    V[s,j*len(funs):(j+1)*len(funs)] = fs_r
+            
+        # prune degenerates
+        if len(degenerates):
+            print "prune %d degenerates ..."  % len(degenerates)
+            V = np.delete(V, degenerates, axis=0)
 
         t1 = time.clock()
-        t_fun += (t1-t0)
-       
-     
-    # outputs some runtime stats ...
-    print "time (bfs/graph): %.3f" : float(t_bfs)/len(data) 
-    print "time (fun/graph): %.3f" : float(t_fun)/len(data)
-      
-    # saves data to disk for further use
-    np.savetxt(dat, dat_name_out)
-    np.savetxt(idx, idx_name_out)
-    np.savetxt(lab, lab_name_out)
+        timings["fun_comp"] += (t1-t0)
+        
+        # stack features
+        if F is None: F = V
+        else: 
+            F = np.vstack((F,V))
+        
+        # stack indices
+        if I is None: I = np.ones((V.shape[0],))
+        else: 
+            I = np.hstack((I,np.ones(V.shape[0],)*(i+1)))
+    
+    # output some timing statistics
+    for k in timings.keys():
+        print "time(%s/graph): %.10f / total=%.5f" % (k, timings[k]/len(graphs), timings[k])
+    
+    # write feature matrix and the assignment of each feature vector
+    # to a graph to HDD
+    if not arg_out_file is None:
+        f_mat_name = "%s.mat" % arg_out_file
+        f_idx_name = "%s.idx" % arg_out_file
+        
+        np.savetxt(f_mat_name, F, delimiter=' ')
+        np.savetxt(f_idx_name, I, delimiter=' ', fmt="%d")
             
-     
-    
-    
-    
-    #nV = int(sys.argv[1]) # nr of vertices
-    #nE = int(sys.argv[2]) # nr. of edges
-    #nSeed = int(sys.argv[3]) # nr. of seed vertices
-    #max_visit = int(sys.argv[4]) # max. vertex visits
-    #max_level = int(sys.argv[5]) # max. cell radius
-    
-    
-    
-
-
-
+ 
 def bfs(G, seed_sample, max_visit=1, max_level=None):
     """Breadth-first search.
     """
@@ -146,7 +235,6 @@ def bfs(G, seed_sample, max_visit=1, max_level=None):
     set_C = [set() for i in seed_sample]
     # L[i][j] stores the distance of the C[i][j] to seed_sample[i]
     L = [[] for i in seed_sample] 
-        
         
     if max_level is None:
         max_level = N
@@ -184,24 +272,6 @@ if __name__ == "__main__":
 
 
 
-#G = nx.gnm_random_graph(nV, nE, seed=1234)
 
-#fig = plt.figure(figsize=(10,10))
-#nx.draw_shell(G)
-#plt.savefig("/Users/rkwitt/Desktop/graph.pdf")
-
-#t0 = time.clock()
-
-#rnd.seed(1234)
-#seed_sample = rnd.sample(G.nodes(), nSeed)
-#C, L = bfs(G, seed_sample, max_visit, max_level)
-
-#t1 = time.clock()
-#print "%.3g [sec]" % (t1-t0)
-
-#for s in range(len(seed_sample)):
-#    print "seed: %d" % seed_sample[s]
-#    print C[s]
-#    print L[s]
     
  
