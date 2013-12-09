@@ -179,7 +179,7 @@ def graph_from_file(graph_file, label_file=None, n_skip=0):
     return G
 
 
-def compute_graph_features(g, radius=2, sps=None, omit_degenerate=False):
+def compute_graph_features(g, radius=2, sps=None, omit_degenerate=False, run_global=False):
     """Compute graph feature vector(s).
 
     Parameters
@@ -202,16 +202,27 @@ def compute_graph_features(g, radius=2, sps=None, omit_degenerate=False):
         vertex. If 'omit_degenerate' is 'True', these subgraphs are
         not considered. Otherwise, the feature vector for such a sub-
         graph is just a vector of zeros.
+        
+    run_global: boolean (default : False)
+        Compute a GLOBAL graph descriptor using the define features.
 
     Returns
     -------
 
     v_mat : numpy matrix, shape (N, D)
         A D-dimensional feature matrix with one feature vector for
-        each vertex. Features are computed for the given radius.
+        each vertex. Features are computed for the given radius. In
+        case global is True, N=1.
     """
 
     logger = logging.getLogger()
+
+    # global feature computation
+    if run_global:
+        v = [attr_fun(g) for attr_fun in attr_list]
+        v_mat = np.zeros((1,len(attr_list)))
+        v_mat[0,:] = np.asarray(v)
+        return v_mat
 
     # Recompute shortest paths if neccessary
     if sps is None:
@@ -251,7 +262,7 @@ def compute_graph_features(g, radius=2, sps=None, omit_degenerate=False):
 
 
 def run_fsa(data, radii=None, recompute=True, out=None, skip=0,
-        omit_degenerate=False):
+        omit_degenerate=False, run_global=False):
     """Run (f)ine-(s)tructure (a)nalysis.
 
     Paramters
@@ -289,6 +300,8 @@ def run_fsa(data, radii=None, recompute=True, out=None, skip=0,
         not considered. Otherwise, the feature vector for such a sub-
         graph is just a vector of zeros.
 
+    run_global : booelan (default : False)
+        Compute a GLOBAL graph descriptor using the define features.
 
     Returns
     -------
@@ -324,8 +337,14 @@ def run_fsa(data, radii=None, recompute=True, out=None, skip=0,
         logger.info("Processing %d-th graph ..." % idx)
 
         T, x = graph_from_file(cf, lf, skip), []
-        for r in radii:
-            x.append(compute_graph_features(T, r, None, omit_degenerate))
+        
+        if run_global:
+            # if run_global is True, all other parameters do NOT matter!
+            x.append(compute_graph_features(T, 0, None, None, run_global))
+        else:
+            for r in radii:
+                x.append(compute_graph_features(T, r, None, omit_degenerate))
+        
         xs = np.hstack(tuple(x))
         data_mat.append(xs)
         data_idx.append(np.ones((xs.shape[0], 1))*idx)

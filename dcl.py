@@ -84,7 +84,8 @@ def main(argv=None):
                           options.recompute,
                           options.writeAs,
                           options.skip,
-                          options.omitDegenerate)
+                          options.omitDegenerate,
+                          True)
     data_mat = fsa_res['data_mat']
     data_idx = fsa_res['data_idx']
 
