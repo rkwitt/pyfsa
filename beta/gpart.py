@@ -113,6 +113,8 @@ def main(argv=None):
     timings["bfs_comp"] = 0
     timings["fun_comp"] = 0
     
+    statistics = []
+    
     F = None # Feature matrix
     I = None # Index matrix
     
@@ -124,8 +126,6 @@ def main(argv=None):
     
     # Run over all graphs 
     for i,G in enumerate(graphs):
-        print i
-        
         V = G.nodes()   # node list for G
         N = len(V)      # nr. of nodes in G
         
@@ -161,16 +161,22 @@ def main(argv=None):
         # Iterate over all seed samples, get neighborhood-induced subgraphs
         # and run feature computation
         t0 = time.clock()
+        G_stat = [0 for x in range(len(arg_num_scale))] 
         for s in range(len(seed_sample)):
+            #print i, s, C[s]
+            
             sg_nodes = C[s] # nodes in cell induced by seed node s 
             sg_dists = L[s] # distances of nodes in cell to seed node s
             
-            degenerates = []
-            
+            degenerates = [] # record degenerate, i.e., V=1, cases
+                        
             # When there are no scales given, we compute one feature
             # vector for the WHOLE neighborhood cell
             if not len(arg_num_scale):
                 sg = G.subgraph(sg_nodes)
+                if len(sg.nodes()) == 1:
+                    degenerates.append(s)
+                    continue
                 V[s,:] = np.asarray([f(sg) for f in funs])
             # otherwise, we compute one feature vector for each level
             # up to max_level -> multiscale
@@ -181,15 +187,24 @@ def main(argv=None):
                     idx = filter(lambda u: sg_dists[u]<=r, range(len(sg_nodes)))
                     sg_r = G.subgraph([sg_nodes[x] for x in idx])
                     
-                    #print "%d: %d/%d" % (r,len(sg_r.nodes()),len(G.nodes()))
-                    #raw_input()
+                    # G_stat[j] records the total number of nodes in each of 
+                    # the subgraph of r = arg_num_scale[j] - This has to be
+                    # later divided by the number of seed nodes to get the 
+                    # average number of nodes in subgraphs of radius r!
+                    G_stat[j] += len(sg_r.nodes())
+                   
+                    # print "%d: %d/%d" % (r,len(sg_r.nodes()),len(G.nodes()))
+                    # raw_input()
                     
                     if len(sg_r.nodes()) == 1:
                         degenerates.append(j)
                         continue
                     fs_r = np.asarray([f(sg_r) for f in funs])
                     V[s,j*len(funs):(j+1)*len(funs)] = fs_r
-            
+        
+        # record the statistics for the current graph
+        statistics.append( {'stat' : G_stat, 'nV' : len(G.nodes()), 'nE' : len(G.edges()) })
+          
         # prune degenerates
         if len(degenerates):
             print "prune %d degenerates ..."  % len(degenerates)
@@ -212,6 +227,19 @@ def main(argv=None):
     for k in timings.keys():
         print "time(%s/graph): %.10f / total=%.5f" % (k, timings[k]/len(graphs), timings[k])
     
+    # output subgraph statistics: we have N graphs, R scales. The
+    # S[i,j]-th entry contains the average number of nodes in the
+    # subgraphs of radius arg_num_scale[j], extracted from the i-th
+    # graph.
+    S = np.zeros((len(statistics),len(arg_num_scale)))
+    
+    for i,G_stat in enumerate(statistics):
+        for j,x in enumerate(G_stat['stat']):
+            S[i,j] = x/float(G_stat['nV']*len(seed_sample))
+    for i,x in enumerate(arg_num_scale):
+        print np.sum(S[:,i],axis=0)/len(statistics)
+        
+        
     # write feature matrix and the assignment of each feature vector
     # to a graph to HDD
     if not arg_out_file is None:
