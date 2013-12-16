@@ -126,6 +126,8 @@ def main(argv=None):
     
     # Run over all graphs 
     for i,G in enumerate(graphs):
+        print "graph %d" % i
+        
         V = G.nodes()   # node list for G
         N = len(V)      # nr. of nodes in G
         
@@ -231,13 +233,14 @@ def main(argv=None):
     # S[i,j]-th entry contains the average number of nodes in the
     # subgraphs of radius arg_num_scale[j], extracted from the i-th
     # graph.
-    S = np.zeros((len(statistics),len(arg_num_scale)))
+    if not arg_run_global:
+        S = np.zeros((len(statistics),len(arg_num_scale)))
     
-    for i,G_stat in enumerate(statistics):
-        for j,x in enumerate(G_stat['stat']):
-            S[i,j] = x/float(G_stat['nV']*len(seed_sample))
-    for i,x in enumerate(arg_num_scale):
-        print np.sum(S[:,i],axis=0)/len(statistics)
+        for i,G_stat in enumerate(statistics):
+            for j,x in enumerate(G_stat['stat']):
+                S[i,j] = x/float(G_stat['nV']*len(seed_sample))
+        for i,x in enumerate(arg_num_scale):
+            print np.sum(S[:,i],axis=0)/len(statistics)
         
         
     # write feature matrix and the assignment of each feature vector
