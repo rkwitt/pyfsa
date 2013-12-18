@@ -234,6 +234,9 @@ def main(argv=None):
     # output some timing statistics
     for k in timings.keys():
         print "time(%s/graph): %.10f / total=%.5f" % (k, timings[k]/len(graphs), timings[k])
+
+    # save timings
+    pickle.dump(timings,open("%s_time.p" % arg_out_file, "w"))
     
     # output subgraph statistics: we have N graphs, R scales. The
     # S[i,j]-th entry contains the average number of nodes in the
@@ -247,6 +250,9 @@ def main(argv=None):
                 S[i,j] = x/float(G_stat['nV']*len(seed_sample))
         for i,x in enumerate(arg_num_scale):
             print np.sum(S[:,i],axis=0)/len(statistics)
+        
+        # save statistics
+        pickle.dump(np.sum(S,axis=0)/len(statistics), open("%s_stat.p" % arg_out_file, "w"))
         
         
     # write feature matrix and the assignment of each feature vector
