@@ -30,7 +30,7 @@ funs = [# Average degree
         # Label entropy, as defined in [2]
         lambda g : label_entropy([e[1]['type'] for e in g.nodes(data=True)]),
         # Mixing coefficient of attributes
-        lambda g : np.linalg.det(nx.attribute_mixing_matrix(g,'type')),
+        #lambda g : np.linalg.det(nx.attribute_mixing_matrix(g,'type')),
         # Link impurity, as defined in [2]
         lambda g : link_impurity(g)]
      
@@ -142,6 +142,7 @@ def main(argv=None):
         else:
             assert arg_pbp_seeds > 0 and arg_pbp_seeds < 1
             sel = int(np.round(float(N)*arg_pbp_seeds))
+            sel = np.max((sel,1))
             seed_sample = rnd.sample(V, sel)
         
         max_visit = arg_max_visit
@@ -164,22 +165,27 @@ def main(argv=None):
         # and run feature computation
         t0 = time.clock()
         G_stat = [0 for x in range(len(arg_num_scale))] 
+        
+        #print seed_sample
+        degenerates = [] # record degenerate, i.e., V=1, cases
+        
         for s in range(len(seed_sample)):
-            #print i, s, C[s]
+            #print i, s, C[s], L[s], len(G.nodes())
+            #raw_input()
             
             sg_nodes = C[s] # nodes in cell induced by seed node s 
             sg_dists = L[s] # distances of nodes in cell to seed node s
             
-            degenerates = [] # record degenerate, i.e., V=1, cases
-                        
             # When there are no scales given, we compute one feature
             # vector for the WHOLE neighborhood cell
             if not len(arg_num_scale):
                 sg = G.subgraph(sg_nodes)
                 if len(sg.nodes()) == 1:
                     degenerates.append(s)
+                    print "skip %d" % s
                     continue
                 V[s,:] = np.asarray([f(sg) for f in funs])
+                #print s,V[s,:]
             # otherwise, we compute one feature vector for each level
             # up to max_level -> multiscale
             else:
@@ -190,8 +196,8 @@ def main(argv=None):
                     sg_r = G.subgraph([sg_nodes[x] for x in idx])
                     
                     # G_stat[j] records the total number of nodes in each of 
-                    # the subgraph of r = arg_num_scale[j] - This has to be
-                    # later divided by the number of seed nodes to get the 
+                    # the subgraphs of radius r = arg_num_scale[j] - This has 
+                    # to be later divided by the number of seed nodes to get the 
                     # average number of nodes in subgraphs of radius r!
                     G_stat[j] += len(sg_r.nodes())
                    
@@ -199,7 +205,7 @@ def main(argv=None):
                     # raw_input()
                     
                     if len(sg_r.nodes()) == 1:
-                        degenerates.append(j)
+                        degenerates.append(s)
                         continue
                     fs_r = np.asarray([f(sg_r) for f in funs])
                     V[s,j*len(funs):(j+1)*len(funs)] = fs_r
@@ -209,7 +215,7 @@ def main(argv=None):
           
         # prune degenerates
         if len(degenerates):
-            print "prune %d degenerates ..."  % len(degenerates)
+            print "prune %d degenerate(s) ..."  % len(degenerates)
             V = np.delete(V, degenerates, axis=0)
 
         t1 = time.clock()
