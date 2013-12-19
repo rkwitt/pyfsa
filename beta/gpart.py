@@ -29,8 +29,6 @@ funs = [# Average degree
         lambda g : float(len(np.where(np.array(nx.degree(g).values())==1)[0]))/g.order(),
         # Label entropy, as defined in [2]
         lambda g : label_entropy([e[1]['type'] for e in g.nodes(data=True)]),
-        # Mixing coefficient of attributes
-        #lambda g : np.linalg.det(nx.attribute_mixing_matrix(g,'type')),
         # Link impurity, as defined in [2]
         lambda g : link_impurity(g)]
      
@@ -63,7 +61,7 @@ def main(argv=None):
     if argv is None: 
         argv = sys.argv
     
-    opts, args = getopt.getopt(argv[1:], "hgv:l:s:i:m:o:")
+    opts, args = getopt.getopt(argv[1:], "hrgv:l:s:i:m:o:")
     
     arg_out_file = None     # base name for output file (with features)
     arg_data_file = None    # input file with pickled graph data
@@ -72,6 +70,7 @@ def main(argv=None):
     arg_pbp_seeds = -1      # probability for choosing a vertex as a seed vertex
     arg_num_scale = []      # compute FSF for each level
     arg_run_global = False  # run global feature computation
+    arg_relabel = False     # relabel the vertices (using 0...#Labels)
 
     for opt, arg in opts:
         if opt == "-h":
@@ -90,6 +89,8 @@ def main(argv=None):
             arg_pbp_seeds = float(arg)
         if opt == "-m":
             arg_num_scale = [int(x) for x in arg.split(',')]
+        if opt == "-r":
+            arg_relabel = True
     
     # Sanity checks ...
     if arg_data_file is None:
@@ -107,6 +108,20 @@ def main(argv=None):
 
     graphs = data["G_dat"] # List of N networkx graphs
     labels = data["G_cls"] # List of N numeric class assignments
+
+    L_dict = dict()
+    if arg_relabel:
+        cnt = 0
+        for G in graphs:
+            for n in G.nodes():
+                v_lab = G.node[n]['type']
+                if not v_lab in L_dict:
+                    L_dict[v_lab] = cnt
+                    cnt += 1
+        for G in graphs:
+            for n in G.nodes():
+                v_lab = G.node[n]['type']
+                G.node[n]['type'] = L_dict[v_lab]
     
     # Initialize timings
     timings = dict()
