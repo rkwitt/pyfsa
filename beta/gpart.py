@@ -31,7 +31,17 @@ funs = [# Average degree
         lambda g : label_entropy([e[1]['type'] for e in g.nodes(data=True)]),
         # Link impurity, as defined in [2]
         lambda g : link_impurity(g)]
+        # Nr. of cycles
+funs += [lambda g : cycle_count(g)]
      
+
+def cycle_count(g):
+    """Count the number of cycles in graph.
+    
+    Returns k if the removal of k edges transforms the graph into a tree.
+    """
+    return len(g.edges())-len(g.nodes())+1
+
             
 def link_impurity(g):
     """Compute link impurity of vertex-labeled graph."""
@@ -143,11 +153,24 @@ def main(argv=None):
     for i,G in enumerate(graphs):
         print "graph %d" % i
         
+        #if i==37:
+        #    fig = plt.figure(figsize=(10,10))
+        #    nx.draw_shell(G)
+        #    plt.show()
+        #    raw_input()
+            
+        
         V = G.nodes()   # node list for G
         N = len(V)      # nr. of nodes in G
         
         if arg_run_global:
             F[i,:] = np.asarray([f(G) for f in funs])
+            if F[i,-1] <= 4:
+                print "Cycles: ", F[i,-1]
+                fig = plt.figure(figsize=(10,10))
+                nx.draw_shell(G)
+                plt.show()
+                raw_input()
             continue
         
         # Make sure that the probability is in [0,1]; if negative,
@@ -174,7 +197,8 @@ def main(argv=None):
         S = 1 # scales
         if len(arg_num_scale) > 1:
             S = len(arg_num_scale)
-        V = np.zeros((len(seed_sample),len(funs)*S))
+        # +1, since we compute the tree-type (depth vs. breadth) only for the largest radi
+        V = np.zeros((len(seed_sample),len(funs)*S+1))
         
         # Iterate over all seed samples, get neighborhood-induced subgraphs
         # and run feature computation
@@ -210,6 +234,9 @@ def main(argv=None):
                     idx = filter(lambda u: sg_dists[u]<=r, range(len(sg_nodes)))
                     sg_r = G.subgraph([sg_nodes[x] for x in idx])
                     
+                    #print len(sg_r.nodes()), sg_dists[-1]
+                    #raw_input()
+                    
                     # G_stat[j] records the total number of nodes in each of 
                     # the subgraphs of radius r = arg_num_scale[j] - This has 
                     # to be later divided by the number of seed nodes to get the 
@@ -224,7 +251,9 @@ def main(argv=None):
                         continue
                     fs_r = np.asarray([f(sg_r) for f in funs])
                     V[s,j*len(funs):(j+1)*len(funs)] = fs_r
-        
+                
+            V[s,-1] = float(sg_dists[-1])/len(sg_nodes)
+                
         # record the statistics for the current graph
         statistics.append( {'stat' : G_stat, 'nV' : len(G.nodes()), 'nE' : len(G.edges()) })
           
