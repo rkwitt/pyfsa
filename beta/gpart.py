@@ -165,12 +165,12 @@ def main(argv=None):
         
         if arg_run_global:
             F[i,:] = np.asarray([f(G) for f in funs])
-            if F[i,-1] <= 4:
-                print "Cycles: ", F[i,-1]
-                fig = plt.figure(figsize=(10,10))
-                nx.draw_shell(G)
-                plt.show()
-                raw_input()
+            #if F[i,-1] <= 4:
+            #    print "Cycles: ", F[i,-1]
+            #    fig = plt.figure(figsize=(10,10))
+            #    nx.draw_shell(G)
+            #    plt.show()
+            #    raw_input()
             continue
         
         # Make sure that the probability is in [0,1]; if negative,
@@ -255,7 +255,9 @@ def main(argv=None):
             V[s,-1] = float(sg_dists[-1])/len(sg_nodes)
                 
         # record the statistics for the current graph
-        statistics.append( {'stat' : G_stat, 'nV' : len(G.nodes()), 'nE' : len(G.edges()) })
+        
+        #import pdb; pdb.set_trace()
+        statistics.append( {'stat' : G_stat, 'nV' : len(G.nodes()), 'nE' : len(G.edges()), 'ss' : len(seed_sample) })
           
         # prune degenerates
         if len(degenerates):
@@ -288,15 +290,15 @@ def main(argv=None):
     # graph.
     if not arg_run_global:
         S = np.zeros((len(statistics),len(arg_num_scale)))
+        G = np.zeros((len(statistics),len(arg_num_scale)))
     
-        for i,G_stat in enumerate(statistics):
-            for j,x in enumerate(G_stat['stat']):
-                S[i,j] = x/float(G_stat['nV']*len(seed_sample))
-        for i,x in enumerate(arg_num_scale):
-            print np.sum(S[:,i],axis=0)/len(statistics)
-        
-        # save statistics
-        pickle.dump(np.sum(S,axis=0)/len(statistics), open("%s_stat.p" % arg_out_file, "w"))
+        for i, st in enumerate(statistics):
+            for j,x in enumerate(st['stat']):
+                S[i,j] = float(x)/st['ss']
+            G[i,:] = np.ones((1,len(arg_num_scale)))*st['nV']
+         
+        print np.sum(S,axis=0)/np.sum(G,axis=0) 
+        pickle.dump(np.sum(S,axis=0)/np.sum(G,axis=0), open("%s_stat.p" % arg_out_file, "w"))
         
         
     # write feature matrix and the assignment of each feature vector
