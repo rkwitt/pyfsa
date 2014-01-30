@@ -14,6 +14,7 @@ import random as rnd
 
 from collections import deque
 
+#import cProfile
 import networkx as nx
 import numpy as np
 import getopt
@@ -23,7 +24,9 @@ import sys
 import os
 
 
-funs = [# Average degree
+funs = [# Graph size
+        lambda g: g.size(), # NEW
+        # Average degree
         lambda g : np.mean([e for e in g.degree().values()]),
         # Percentage of isolated points (i.e., degree(v) = 1)
         lambda g : float(len(np.where(np.array(nx.degree(g).values())==1)[0]))/g.order(),
@@ -33,14 +36,23 @@ funs = [# Average degree
         lambda g : link_impurity(g)]
         # Nr. of cycles
 funs += [lambda g : cycle_count(g)]
+        # Degree entropy
+#funs += [lambda g : degree_entropy(g.degree().values())]
      
+     
+def degree_entropy(deg):
+    H = np.bincount(deg)
+    p = H[np.nonzero(H)].astype(float)/np.sum(H)
+    return np.abs(-np.sum(p * np.log(p)))
+    
 
 def cycle_count(g):
     """Count the number of cycles in graph.
     
     Returns k if the removal of k edges transforms the graph into a tree.
     """
-    return len(g.edges())-len(g.nodes())+1
+    return 1.0/len(g.nodes()) * (len(g.edges())-len(g.nodes())+1)
+    #return len(g.edges())-len(g.nodes())+1
 
             
 def link_impurity(g):
@@ -149,6 +161,9 @@ def main(argv=None):
         F = np.zeros((len(graphs),len(funs)))
         I = np.zeros((len(graphs)))
     
+    # start timer for running over all graphs
+    total_time_beg = time.clock()
+    
     # Run over all graphs 
     for i,G in enumerate(graphs):
         print "graph %d" % i
@@ -198,8 +213,9 @@ def main(argv=None):
         if len(arg_num_scale) > 1:
             S = len(arg_num_scale)
         # +1, since we compute the tree-type (depth vs. breadth) only for the largest radi
-        V = np.zeros((len(seed_sample),len(funs)*S+1))
-        
+        #V = np.zeros((len(seed_sample),len(funs)*S+1))
+        V = np.zeros((len(seed_sample),len(funs)*S))
+         
         # Iterate over all seed samples, get neighborhood-induced subgraphs
         # and run feature computation
         t0 = time.clock()
@@ -251,8 +267,8 @@ def main(argv=None):
                         continue
                     fs_r = np.asarray([f(sg_r) for f in funs])
                     V[s,j*len(funs):(j+1)*len(funs)] = fs_r
-                
-            V[s,-1] = float(sg_dists[-1])/len(sg_nodes)
+                   
+            #V[s,-1] = float(sg_dists[-1])/len(sg_nodes)
                 
         # record the statistics for the current graph
         
@@ -276,6 +292,10 @@ def main(argv=None):
         if I is None: I = np.ones((V.shape[0],))
         else: 
             I = np.hstack((I,np.ones(V.shape[0],)*(i+1)))
+    
+    total_time_end = time.clock()
+    print "Total runtime (over all graphs): %.10g [sec]" % (total_time_end - total_time_beg)
+    
     
     # output some timing statistics
     for k in timings.keys():
